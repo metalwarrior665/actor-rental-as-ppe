@@ -38,16 +38,29 @@ await Actor.init();
 const { requestsCount = 50, prepaidRentalResultsCount = 100 } = (await Actor.getInput<Input>())!;
 
 const yearMonth = new Date().toISOString().slice(0, 7);
-const bookkeepingDataset = await Actor.openDataset<BookkeepingRecord>(`${yearMonth}-${Actor.getEnv().userId}`);
 
-let bookkeepingItems = (await bookkeepingDataset.getData()).items;
+// Bookkeping dataset is managed on the creator's account via their token. 
+// They are responsible for not deleting active datasets
+const bookkeepingClient = Actor.newClient({ token: process.env.BOOKKEEPING_TOKEN || undefined });
+const bookkeepingDatasetObject = await bookkeepingClient.datasets().getOrCreate(`${yearMonth}-${Actor.getEnv().userId}`);
+const bookkeepingDatasetClient = bookkeepingClient.dataset<BookkeepingRecord>(bookkeepingDatasetObject.id);
+
+const getBookkeepingItems = async (): Promise<BookkeepingRecord[]> => {
+    return (await bookkeepingDatasetClient.listItems()).items;
+}
+
+const pushBookkeepingData = async (data: BookkeepingRecord | BookkeepingRecord[]) => {
+    return await bookkeepingDatasetClient.pushItems(data);
+}
+
+let bookkeepingItems = await getBookkeepingItems();
 
 // Check if we are first run to start this month
 const wasAlreadyRunThisMonth = bookkeepingItems.some((item) => item.type === 'first-month-run');
 
 if (!wasAlreadyRunThisMonth) {
     // If not, we push to record that we are the first one
-    await bookkeepingDataset.pushData({
+    await pushBookkeepingData({
         type: 'first-month-run',
         runId: Actor.getEnv().actorRunId!,
         timestamp: new Date().toISOString(),
@@ -56,7 +69,7 @@ if (!wasAlreadyRunThisMonth) {
     // Now we don't want to charge the high rental charge right away because we could have parallel runs that think they are the firs too
     // So to add assurance, we re-read the dataset again in 5 seconds and only charge if we are the first run that registered in the dataset
     setTimeout(async () => {
-        bookkeepingItems = (await bookkeepingDataset.getData()).items;
+        bookkeepingItems = await getBookkeepingItems();
 
         const isThisReallyFirstRun =
             bookkeepingItems.find((item) => item.type === 'first-month-run')?.runId === Actor.getEnv().actorRunId;
@@ -90,9 +103,8 @@ let bookkeepingPushedResultsCount = sumBookkeepingPushedResultsCount(bookkeeping
 
 const getPushedFreeResultsCount = async () => {
     // Reload the bookkeeping items
-    const { items } = await bookkeepingDataset.getData();
     // Count how many items we have pushed this month
-    return sumBookkeepingPushedResultsCount(items);
+    return sumBookkeepingPushedResultsCount(await getBookkeepingItems());
 };
 
 setInterval(async () => {
@@ -117,12 +129,7 @@ const crawler = new CheerioCrawler({
         await sleep(1000); // Simulate some delay
 
         await Actor.pushData({ url: request.loadedUrl });
-        await bookkeepingDataset.pushData({
-            type: 'items-pushed',
-            count: 1,
-            runId: Actor.getEnv().actorRunId!,
-            timestamp: new Date().toISOString(),
-        });
+        
         // We increment the bookkeping count even before we sync it from the dataset, the sync will override it later
         bookkeepingPushedResultsCount++;
 
@@ -131,6 +138,12 @@ const crawler = new CheerioCrawler({
             log.info(
                 `Pushing free result. ${bookkeepingPushedResultsCount}/${prepaidRentalResultsCount} pushed so far this month.`,
             );
+            await pushBookkeepingData({
+                type: 'items-pushed',
+                count: 1,
+                runId: Actor.getEnv().actorRunId!,
+                timestamp: new Date().toISOString(),
+            });
         } else {
             log.info(
                 `Pushed ${bookkeepingPushedResultsCount} results this month, no more free results (up to ${prepaidRentalResultsCount}) available. Charging for this result.`,
