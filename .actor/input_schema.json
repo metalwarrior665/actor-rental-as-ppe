@@ -3,22 +3,17 @@
     "type": "object",
     "schemaVersion": 1,
     "properties": {
-        "startUrls": {
-            "title": "Start URLs",
-            "type": "array",
-            "description": "URLs to start with.",
-            "editor": "requestListSources",
-            "prefill": [
-                {
-                    "url": "https://apify.com"
-                }
-            ]
-        },
-        "maxRequestsPerCrawl": {
-            "title": "Max Requests per Crawl",
+        "requestsCount": {
+            "title": "Requests Count",
             "type": "integer",
-            "description": "Maximum number of requests that can be made by this crawler.",
-            "default": 100
-        }
+            "default": 50,
+            "description": "Number of requests to simulate in this run."
+        },
+       "prepaidRentalResultsCount": {
+           "title": "Prepaid Rental Results Count",
+           "type": "integer",
+           "default": 100,
+           "description": "Number of simulated prepaid rental results. This would normally be set in the code but is included here for demonstration purposes."
+       }
     }
 }
