@@ -11,3 +11,5 @@ The code is also a bit old, so don't copy-paste it without any analysis.
 This is an example Actor for implementing a rental billing system inside PPE (pay-per-event) billing model. Follow code comments for more details.
 
 The Actor bills a symbolic event price of $0.00001 per event (both `rental` and `result` events) so feel free to test it.
+
+See the [Actor in Apify Store](https://apify.com/lukaskrivka/rental-as-ppe-example).
